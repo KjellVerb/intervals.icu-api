@@ -1,3 +1,4 @@
+import os
 import requests
 import json
 import base64
@@ -7,7 +8,7 @@ from datetime import datetime
 ATHLETE_ID = "ID"  # Replace with your athlete ID
 API_KEY = "API_KEY"        # Replace with your API key
 BASE_URL = "https://intervals.icu/api/v1/athlete"
-ZONE_TYPE = "HR" #"Pace"
+
 # Encode "API_KEY:api_key" in Base64 for the Authorization header
 def encode_auth(api_key):
     token = f"API_KEY:{api_key}".encode("utf-8")
@@ -34,40 +35,45 @@ def convert_duration(duration):
     else:
         return int(duration)  # Default for unknown formats
 
-# Expand repeated intervals into separate blocks
-def expand_repeats(steps):
-    expanded_steps = []
-    for step in steps:
-        if "description" in step and step["description"].endswith("x"):
-            repeat_count = int(step["description"].replace("x", "").strip())
-            for _ in range(repeat_count):
-                expanded_steps.extend(steps[steps.index(step) + 1:steps.index(step) + 3])
-        elif "duration" in step:
-            expanded_steps.append(step)
-    return expanded_steps
-
 # Format training data for API submission
 def format_training_data(trainings):
     formatted_data = []
-    for training in trainings["trainings"]:
+    for training_name, training in trainings.items():
         description_lines = []
-        expanded_steps = expand_repeats(training["steps"])
+        moving_time = 0
 
-        for step in expanded_steps:
-            description_lines.append(f"- {step['duration']} in {step['zone']}")
-            if "cadence" in step:
-                description_lines[-1] += f" ({step['cadence']})"
+        for step in training["steps"]:
+            if "reps" in step.keys():
+                description_lines.append(f"\n{step['reps']}x")
+                for substep in step["steps"]:
+                    description_line = f"- {substep['description']}"
+                    description_line += f" {substep['duration']}"
+                    description_line += f" in {substep['zone']}"
+                    description_line += f" cadence={substep['cadence']}" if 'cadence' in substep else ''
+                    description_line += f" intensity={substep['intensity']}" if 'intensity' in substep else ''
+                    description_lines.append(description_line)
+
+                    moving_time += convert_duration(substep['duration'])
+
+                description_lines.append('\n')
+            else:
+                description_line = f"- {step['description']}"
+                description_line += f" {step['duration']}"
+                description_line += f" in {step['zone']}"
+                description_line += f" cadence={step['cadence']}" if 'cadence' in step else ''
+                description_line += f" intensity={step['intensity']}" if 'intensity' in step else ''
+                description_lines.append(description_line)
+
+                moving_time += convert_duration(step['duration'])
 
         formatted_data.append({
             "start_date_local": training["date"] + "T00:00:00",
             "category": "WORKOUT",
-            "name": training["name"],
+            "name": training_name,
             "description": "\n".join(description_lines).strip(),
-            "type": "Ride" if "Bike" in training["name"] else "Run" if "Run" in training["name"] else "Swim",
-            "moving_time": sum(
-                convert_duration(step["duration"]) for step in expanded_steps
-            ),
-            "steps": expanded_steps
+            "type": training["activity"],
+            "moving_time": moving_time,
+            "steps": training["steps"]
         })
     return formatted_data
 
@@ -84,6 +90,7 @@ def upload_trainings(data):
 # Main function
 def main():
     try:
+        os.chdir(os.path.dirname(__file__))
         trainings = load_trainings("trainings.json")
         formatted_data = format_training_data(trainings)
         upload_trainings(formatted_data)

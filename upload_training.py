@@ -16,9 +16,15 @@ def get_next_monday():
     return today + timedelta(days=days_ahead)
 
 # Configuration
-ATHLETE_ID = "***REMOVED***"  # Replace with your athlete ID
-API_KEY = "***REMOVED***"        # Replace with your API key
+ATHLETE_ID = os.getenv("INTERVALS_ATHLETE_ID")  # Set via environment variable
+API_KEY = os.getenv("INTERVALS_API_KEY")        # Set via environment variable
 BASE_URL = "https://intervals.icu/api/v1/athlete"
+
+# Validate required environment variables
+if not ATHLETE_ID:
+    raise ValueError("INTERVALS_ATHLETE_ID environment variable is required")
+if not API_KEY:
+    raise ValueError("INTERVALS_API_KEY environment variable is required")
 
 # Encode "API_KEY:api_key" in Base64 for the Authorization header
 def encode_auth(api_key):

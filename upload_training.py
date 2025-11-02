@@ -4,6 +4,10 @@ import json
 import base64
 import argparse
 from datetime import datetime, timedelta
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 def get_next_monday():
     """Get the date of the next Monday from today"""
@@ -141,7 +145,7 @@ def upload_workouts(data):
 def main():
     parser = argparse.ArgumentParser(description='Upload training data to Intervals.icu. Either create a plan or upload separate workouts. The default start date for a plan is next Monday.')
     parser.add_argument('json_file', help='Path to the JSON file containing training data', default='trainings.json')
-    parser.add_argument('--mode', choices=['plan', 'workouts'], default='workouts', 
+    parser.add_argument('--mode', choices=['plan', 'workouts', 'test'], default='workouts',
                        help='Choose whether to create a plan or upload separate workouts (default: workouts)')
     parser.add_argument('--plan-name', default='Python training plan',
                        help='Name for the training plan (default: Python training plan)')
@@ -151,13 +155,19 @@ def main():
     try:
         os.chdir(os.path.dirname(__file__))
         trainings = load_trainings(args.json_file)
-        
-        if args.mode == 'plan':
+
+        if args.mode == 'test':
+            print(json.dumps(format_training_data(trainings), indent=2))
+            return
+        elif args.mode == 'plan':
             folder_id = create_plan(args.plan_name)
             formatted_data = format_training_data(trainings, folder_id)
-        else:  # workouts mode
+        elif args.mode == 'workouts':  # workouts mode
             formatted_data = format_training_data(trainings)
-            
+        else:  # invalid mode
+            print("Invalid mode argument.")
+            return
+
         upload_workouts(formatted_data)
 
     except Exception as e:
